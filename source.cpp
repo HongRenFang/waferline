@@ -19,37 +19,49 @@ void FindBlobs(const cv::Mat &binary, std::vector <std::vector<cv::Point2i>> &bl
 
 void FirLowPass(int *arr_in,int *arr_output,int length);
 void peak_search(int *x,int* peakindex,int* peak_number,int* peak,int* peak_order);
-int two_peak(int* x,int* peak_order,int par);
+int mid_peak(int* x,int peaknumber,int* peak,int* peak_order,float left_bound);
 int leftpeak_search(float threshold,int* x,int* peakindex );
-Mat remove_small(Mat& imgb,int binary,char* str);
+Mat remove_small(Mat& img,Mat& imgb,int binary,char* str);
 
 Mat img1,img2;
 
 int main()
 {
-	Mat img=imread("1.bmp",0); //load image
-	Mat imgray,imgblur,imgblur2,imgb,result;//declare image array variable
+	//load image
+	char* filename = "1.bmp";
+	Mat img=imread(filename,0); 
+	//image
+	Mat imgray,imgblur,imgblur2,imgb,result;
 	Mat imgb2;
-	Mat histogram,equalization,equalization2; //histogram
+	//histogram
+	Mat histogram,equalization,equalization2; 
 	int r,g,b,gray;
-	int x[256]={0};//histogram value
-	int x_dif[257]={0},x_dif2[257]={0};//histogram value
+	//histogram value
+	int x[256]={0};
+	//histogram value
+	int x_dif[257]={0},x_dif2[257]={0};
 	int y[256]={0};
-	int area;	//width*height Total pixel
-	double p[256]={0.0};// Probability of x[i]
-	double mean=0.0 ,var = 0.0 ,sigma=0.0;//mean , covariance 	
-	char c[10];//for hisogram coordinate
+	//width*height Total pixel
+	int area;	
+	// Probability of x[i]
+	double p[256]={0.0};
+	//mean , covariance 	
+	double mean=0.0 ,var = 0.0 ,sigma=0.0;
+	//for hisogram coordinate
+	char c[10];
 
 	/// Initialization
 	///********************************************************************************
-	area = img.rows*img.cols;//width*height
-	imgblur = cv::Mat(img.rows, img.cols, CV_8UC1 );// build a 1 channel image for gray scale image
+	//width*height
+	area = img.rows*img.cols;
+	// build a 1 channel image for gray scale image
+	imgblur = cv::Mat(img.rows, img.cols, CV_8UC1 );
 	imgblur2 = cv::Mat(img.rows, img.cols, CV_8UC1 );
 	imgb = cv::Mat::zeros(img.rows, img.cols, CV_8UC1 );
 	imgb2 = cv::Mat::zeros(img.rows, img.cols, CV_8UC1 );
 	///********************************************************************************
-
-	clock_t start, end;//calculate code processing time
+	//calculate code processing time
+	clock_t start, end;
 	float total_time = 0;
     start = clock();
 	//bilateralFilter(img, imgblur2, 11,20 ,20);
@@ -65,7 +77,8 @@ int main()
     {
 	    for(int j = 0;j < imgblur.cols;j++)
         {
-			x[imgblur.at<uchar>(i, j)]++;// calculate the numbers of pixel for 0~255 
+			// calculate the numbers of pixel for 0~255 
+			x[imgblur.at<uchar>(i, j)]++;
         }
     }
 	//imshow("imgblur",imgblur);
@@ -81,7 +94,8 @@ int main()
 	
 
 	/* mean,std */
-	Scalar mean_scalar,stddev_scalar;//mean and standard deviation
+	//mean and standard deviation
+	Scalar mean_scalar,stddev_scalar;
 	float mean_x,stddev_x;
     cv::meanStdDev ( imgblur, mean_scalar, stddev_scalar );
     mean_x = mean_scalar.val[0];
@@ -113,8 +127,8 @@ int main()
 	int peak[256]={0};
 	int peak_order[256]={0};
 	peak_search(lp_x,peakindex,&peak_number,peak,peak_order);
-	for(int i=0;i<256;i++)
-		printf("%d\tlp_x=%d\n",i,lp_x[i]);
+/*	for(int i=0;i<256;i++)
+		printf("%d\tlp_x=%d\n",i,lp_x[i]);*/
 	for(int i=0;i<peak_number;i++)
 		printf("%d\tpeak=%d\n",peak_order[i],peak[i]);
 ///=================================================
@@ -125,20 +139,9 @@ int main()
 ///=================================================
 ///   the biggest peaks 
 ///=================================================
-	int valley_left_right = two_peak(x,peak_order,1);
-	printf("valley_left_right=%d",valley_left_right);
-	/* max gray intensity on the mid side */
-	int peak_max=0,peak_max_index=0;
-	for(int i=valley_left_right;i<256;i++)
-	{
-		if(x[i]>peak_max)
-		{
-			peak_max = x[i];
-			peak_max_index = i;
-		}
-	}
-	printf("peak_max = %d\n",peak_max_index);
-	otsu_method(imgblur,imgb,0,peak_max_index);
+	int midpeak = mid_peak(x,peak_number,peak,peak_order,mean_x-stddev_x);
+	printf("midpeak=%d",midpeak);
+	otsu_method(imgblur,imgb,0,midpeak);
 	medianBlur(imgb,imgb,5);
 	imshow("otsu LEFT",imgb);
 	
@@ -183,21 +186,14 @@ int main()
 	imgb_combine = (255-imgb)+imgb2;
 	cout<<"mean_x="<<mean_x<<endl;
 	otsu_method(imgblur,imgb,peak_diewall_index,mean_x);
-	///imshow("otsu-left",imgb);
-	//imshow("otsu-right",imgb2);
-	//imshow("otsu-combine",imgb_combine);
-	//imwrite("otsu6.bmp",imgb);
-	///remove outliers
 	medianBlur(imgb,imgb,5);
-	///imshow("median",imgb);
-	//imwrite("median1.bmp",imgb);
-	medianBlur(imgb_combine,imgb_combine,3);
-	//imshow("median imgb_combine",imgb_combine);
+	///imshow("otsu-left2",imgb);
+
 ///=====================================================
 ///                  remove small object noises
 ///=====================================================		
-	Mat img_denoise = remove_small(imgb,0,"b");
-	Mat connected_label = remove_small(img_denoise,255,"rgb");
+	Mat img_denoise = remove_small(img,imgb,0,"b");
+	Mat connected_label = remove_small(imgblur,img_denoise,255,"rgb");
 	imshow("img_denoise",img_denoise);
 	imshow("connected_label",connected_label);
 	//imwrite("compensate6.bmp",img_denoise);
@@ -218,7 +214,12 @@ int main()
 		 }
     }
 	imshow("img_roi",img_roi);
-	imwrite("img_roi1.bmp",img_roi);
+	//need space for string behind
+	char write_name[20] = "img_roi";
+	strcat(write_name,filename);
+	//imwrite(write_name,img_roi);
+
+
 ///=====================================================
 ///           compensate for broken line
 ///=====================================================
@@ -233,7 +234,8 @@ int main()
 				 {
 					  for(int j2=j-(window-1)/2; j2<=j+(window-1)/2 ;j2++)
 					  {
-						  if( img.at<uchar>(i2,j2)<0.5*valley_left_right)
+						  //tune
+						  if( img.at<uchar>(i2,j2)<0.5*midpeak)
 							  img_denoise.at<uchar>(i2,j2)=0;
 					  }
 				 }			 				  
@@ -644,7 +646,7 @@ void peak_search(int *x,int* peakindex,int* peak_number,int* peak,int* peak_orde
 	bubblesort(peak,peak_order,n);	
 }
 
-int two_peak(int* x,int* peak_order,int par)
+int mid_peak(int* x,int peaknumber,int* peak,int* peak_order,float left_bound)
 {
 	/* 2 biggest peaks */
 	printf("\nPeak1=%d,Peak2=%d\n",peak_order[0],peak_order[1]);
@@ -657,29 +659,23 @@ int two_peak(int* x,int* peak_order,int par)
 		peak_left = peak_order[1];
 	}
 	/* find the right peak's valley */
-	int valley_right,valley_left_right;
-	for(int i=peak_right;i<254;i++)
+	//int valley_right,valley_left_right;
+	int mid_peak_left=peak_right;
+	for(int i=0;i<peaknumber;i++)
 	{
-		if(x[i]<x[i+1])
+		if(peak_order[i]>left_bound && peak_order[i]<peak_right)
 		{
-			valley_right = i+1 ;
-			break;
+			if(peak_order[i] < mid_peak_left)
+			{
+				mid_peak_left = peak_order[i];
+			}
 		}
+	
 	}
-	for(int i=peak_left;i<254;i++)
-	{
-		if(x[i]<x[i+1])
-		{
-			valley_left_right = i+1 ;
-			break;
-		}
+	
+	printf("\nvalley_right=%d\n",mid_peak_left);
+	return mid_peak_left;
 
-	}
-	printf("\nvalley_right=%d\n",valley_right);
-	if(par==1)
-	    return valley_left_right;
-	else
-		return valley_right;
 	
 }
 /* mean_x-stddev_x */
@@ -728,38 +724,74 @@ int leftpeak_search(float threshold,int* x,int* peakindex )
 	//printf("peak_diewall_index=%d\n",peak_diewall_index);
 	return peak_diewall_index;
 }
-Mat remove_small(Mat& imgb,int binary,char* str)
+Mat remove_small(Mat& img,Mat& imgb,int binary,char* str)
 {
 	std::vector < std::vector<cv::Point2i > > blobs;
 	Mat connected_label = cv::Mat::zeros(imgb.size(), CV_8UC3);
-	//find connected component
+	// find connected component
 	FindBlobs(imgb,blobs,binary);
+	// draw rgb color on labels
 	drawlabel(connected_label,blobs);
-	//sum of total size of object
+	// sum of total size of object
     int sum_component_size = 0;
 	for(int i=0;i<blobs.size();i++)
 	{
-		///printf("size of %d=%d\n",i,blobs[i].size());
+		//printf("size of %d=%d\n",i,blobs[i].size());
 		sum_component_size+=blobs[i].size();
 	}
 	printf("sum=%d",sum_component_size);
-	Mat img_denoise = imgb.clone();
-	for(size_t i=0;i<blobs.size();i++)
-	{
-		if(blobs[i].size()<(int)(0.5*sum_component_size/blobs.size()))
-		{
-			for(size_t j=0;j<blobs[i].size();j++)
-	        {
-				int x = blobs[i][j].x;
-				int y = blobs[i][j].y;
-				img_denoise.at<uchar>(y,x) = 255;
-				connected_label.at<cv::Vec3b>(y,x) = cv::Vec3b(0,0,0);
-			}
-		}			
-	}
+
+	Mat remove_small = imgb.clone();
+
 	if(str=="rgb")
-	    return connected_label;
+	{
+		for(size_t i=0;i<blobs.size();i++)
+	    {
+		    if(blobs[i].size()<(int)(0.5*sum_component_size/blobs.size())  )
+		    {
+				int region_sum_intensity = 0;
+				double avg_intensity=0;
+
+			    for(size_t j=0;j<blobs[i].size();j++)
+	            {
+				    int x = blobs[i][j].x;
+				    int y = blobs[i][j].y;  
+					region_sum_intensity += img.at<uchar>(y,x);				
+			    }
+				avg_intensity = (double)(region_sum_intensity/blobs[i].size());
+				printf("region_sum_intensity=%d,avg_intensity=%f\n",region_sum_intensity,avg_intensity);
+				///need tune
+				if(avg_intensity >160)
+				{
+					for(size_t j=0;j<blobs[i].size();j++)
+	                {
+				        int x = blobs[i][j].x;
+				        int y = blobs[i][j].y;  				
+				        connected_label.at<cv::Vec3b>(y,x) = cv::Vec3b(0,0,0);
+			        }
+				}
+
+		    }			
+	    }
+		return connected_label;
+	}
+	    
 	else if(str=="b")
-		return img_denoise;
+	{
+		for(size_t i=0;i<blobs.size();i++)
+	    {
+		    if(blobs[i].size()<(int)(0.5*sum_component_size/blobs.size()) )
+		    {
+			    for(size_t j=0;j<blobs[i].size();j++)
+	            {
+				    int x = blobs[i][j].x;
+				    int y = blobs[i][j].y;
+				    remove_small.at<uchar>(y,x) = 255;				 
+			    }
+		    }			
+	    }
+		return remove_small;
+	}
+		
 }
 	
